@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.V TOWERS 2.0 - Smart Community Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        .glass {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow-cyan { box-shadow: 0 0 25px rgba(6, 182, 212, 0.2); }
+        .neon-glow-indigo { box-shadow: 0 0 25px rgba(99, 102, 241, 0.2); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen pb-12 selection:bg-cyan-500 selection:text-black">
+
+    <!-- RESIDENT LOGIN OVERLAY -->
+    <div id="loginOverlay" class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+        <div class="glass p-8 rounded-3xl max-w-sm w-full text-center space-y-6 shadow-2xl border border-cyan-500/30 neon-glow-cyan">
+            <div class="w-20 h-20 bg-gradient-to-tr from-cyan-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-lg transform rotate-3">
+                🏢
+            </div>
+            <div>
+                <h2 class="text-3xl font-black tracking-tight text-white">A.V. TOWERS <span class="text-cyan-400 text-sm font-bold">2.0</span></h2>
+                <p class="text-xs text-slate-400 mt-1">Authorized Resident Access Only</p>
+            </div>
+            
+            <div class="space-y-3">
+                <input type="password" id="residentPinInput" placeholder="Passcode (e.g. 1040)" class="w-full bg-slate-900/90 border border-slate-700 focus:border-cyan-400 rounded-2xl p-4 text-center text-xl font-mono tracking-widest text-white focus:outline-none transition">
+                <p class="text-[11px] text-slate-500">Flat 104 ➔ <span class="text-cyan-400 font-mono">1040</span> | Flat 201 ➔ <span class="text-cyan-400 font-mono">2010</span></p>
+            </div>
+
+            <button onclick="unlockResidentPortal()" class="w-full bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-black font-extrabold py-3.5 rounded-2xl text-sm transition transform active:scale-95 shadow-lg">
+                Enter App 🚀
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="appContainer" class="hidden">
+
+        <!-- NAV HEADER -->
+        <header class="sticky top-0 z-40 glass border-b border-slate-800 px-4 py-3 mb-6">
+            <div class="max-w-6xl mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-xl flex items-center justify-center font-black">AV</div>
+                    <div>
+                        <h1 class="font-black text-lg text-white flex items-center gap-2">
+                            A.V. TOWERS
+                            <span id="userFlatBadge" class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-2 py-0.5 rounded-full border border-cyan-500/30">Flat --</span>
+                        </h1>
+                        <p class="text-[10px] text-slate-400">Smart Community Engine</p>
+                    </div>
+                </div>
+
+                <!-- RIGHT CONTROLS -->
+                <div class="flex items-center gap-2">
+                    <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-slate-900 border border-slate-700 text-cyan-400 text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none">
+                        <option value="en">English</option>
+                        <option value="te">తెలుగు</option>
+                        <option value="hi">हिंदी</option>
+                    </select>
+
+                    <button onclick="openAdminModal()" class="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs font-bold px-3 py-1.5 rounded-xl">
+                        ⚙️ Admin
+                    </button>
+                    <button onclick="logoutResident()" class="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-xs font-bold px-2.5 py-1.5 rounded-xl">
+                        🚪
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-6xl mx-auto px-4 space-y-8">
+
+            <!-- URGENT ADMIN BROADCAST BANNER -->
+            <div id="urgentBroadcast" class="hidden bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-amber-500/20 border border-amber-500/40 p-4 rounded-2xl text-amber-200 text-xs flex justify-between items-center">
+                <span class="flex items-center gap-2 font-bold">📢 <span id="broadcastText">Water Tanker Cleaning Scheduled for Tomorrow 10 AM.</span></span>
+                <span class="text-[10px] text-amber-400/80 font-mono">OFFICIAL ANNOUNCEMENT</span>
+            </div>
+
+            <!-- WORKER & HELPLINE CONTACTS BAR -->
+            <section class="glass p-5 rounded-3xl border border-slate-800 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xs font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                        📞 Workers & Emergency Directory
+                    </h2>
+                    <span class="text-[10px] text-slate-400">1-Tap Direct Call</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    <a href="tel:+919876543210" class="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 p-3 rounded-2xl text-center space-y-1 block transition">
+                        <div class="text-lg">👮‍♂️</div>
+                        <div class="text-xs font-bold text-white">Watchman</div>
+                        <div class="text-[10px] text-emerald-400 font-mono">Call ➔</div>
+                    </a>
+                    <a href="tel:+919876543211" class="bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 p-3 rounded-2xl text-center space-y-1 block transition">
+                        <div class="text-lg">🪠</div>
+                        <div class="text-xs font-bold text-white">Plumber</div>
+                        <div class="text-[10px] text-cyan-400 font-mono">Call ➔</div>
+                    </a>
+                    <a href="tel:+919876543212" class="bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 p-3 rounded-2xl text-center space-y-1 block transition">
+                        <div class="text-lg">⚡</div>
+                        <div class="text-xs font-bold text-white">Electrician</div>
+                        <div class="text-[10px] text-amber-400 font-mono">Call ➔</div>
+                    </a>
+                    <a href="tel:+919876543213" class="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 p-3 rounded-2xl text-center space-y-1 block transition">
+                        <div class="text-lg">🛗</div>
+                        <div class="text-xs font-bold text-white">Lift Tech</div>
+                        <div class="text-[10px] text-indigo-400 font-mono">Call ➔</div>
+                    </a>
+                    <a href="tel:+919876543214" class="bg-slate-900/90 border border-slate-800 hover:border-blue-500/50 p-3 rounded-2xl text-center space-y-1 block transition">
+                        <div class="text-lg">💧</div>
+                        <div class="text-xs font-bold text-white">Water Tanker</div>
+                        <div class="text-[10px] text-blue-400 font-mono">Call ➔</div>
+                    </a>
+                    <a href="tel:+919876543215" class="bg-slate-900/90 border border-slate-800 hover:border-rose-500/50 p-3 rounded-2xl text-center space-y-1 block transition">
+                        <div class="text-lg">🗑️</div>
+                        <div class="text-xs font-bold text-white">Garbage Collector</div>
+                        <div class="text-[10px] text-rose-400 font-mono">Call ➔</div>
+                    </a>
+                </div>
+            </section>
+
+            <!-- STATS CARDS -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div class="glass p-4 rounded-2xl border border-emerald-500/20">
+                    <p class="text-[10px] text-emerald-400 uppercase font-black" data-i18n="collected">Collected</p>
+                    <h3 class="text-2xl font-black text-white mt-1" id="totalCollected">₹0</h3>
+                    <p class="text-[10px] text-slate-400">19 Flats × ₹1,500</p>
+                </div>
+                <div class="glass p-4 rounded-2xl border border-rose-500/20">
+                    <p class="text-[10px] text-rose-400 uppercase font-black" data-i18n="spent">Spent</p>
+                    <h3 class="text-2xl font-black text-white mt-1" id="totalSpent">₹0</h3>
+                    <p class="text-[10px] text-slate-400">Repair Expenses</p>
+                </div>
+                <div class="glass p-4 rounded-2xl border border-cyan-500/20">
+                    <p class="text-[10px] text-cyan-400 uppercase font-black" data-i18n="balance">Balance</p>
+                    <h3 class="text-2xl font-black text-cyan-400 mt-1" id="currentBalance">₹0</h3>
+                    <p class="text-[10px] text-slate-400">Treasury Cash</p>
+                </div>
+                <div class="glass p-4 rounded-2xl border border-amber-500/20">
+                    <p class="text-[10px] text-amber-400 uppercase font-black" data-i18n="complaints">Open Issues</p>
+                    <h3 class="text-2xl font-black text-amber-400 mt-1" id="openComplaintsCount">0</h3>
+                    <p class="text-[10px] text-slate-400">Public Reports</p>
+                </div>
+            </div>
+
+            <!-- MAINTENANCE MATRIX -->
+            <section class="glass p-6 rounded-3xl border border-slate-800">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
+                    <div>
+                        <h2 class="text-lg font-black text-white" data-i18n="matrixTitle">19-Flat Maintenance Grid</h2>
+                        <p class="text-xs text-slate-400" data-i18n="matrixSub">Tap your flat number to update status.</p>
+                    </div>
+                    <div class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs px-3 py-1.5 rounded-xl font-mono font-bold flex items-center gap-2 self-start sm:self-auto">
+                        <span>🤖 Auto-Reset Active:</span>
+                        <span id="currentMonthBadge" class="text-white bg-slate-900 px-2 py-0.5 rounded border border-slate-800">--</span>
+                    </div>
+                </div>
+                <div id="flatsGrid" class="space-y-3"></div>
+            </section>
+
+            <!-- MONTHLY BANK STATEMENTS ARCHIVE -->
+            <section class="glass p-6 rounded-3xl border border-slate-800 space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-black text-white">Monthly Bank Statements Archive 🏛️</h2>
+                        <p class="text-xs text-slate-400">Official monthly bank passbook uploads for complete financial transparency.</p>
+                    </div>
+                    <span class="text-[10px] text-cyan-400 bg-slate-900 border border-slate-800 px-3 py-1 rounded-full font-mono">100% Audited</span>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- ADMIN STATEMENT UPLOAD FORM -->
+                    <div class="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 lg:col-span-1 space-y-4">
+                        <h3 class="text-xs font-black uppercase text-amber-400 tracking-wider">Upload Bank Statement (Admin)</h3>
+                        <form id="bankStatementForm" class="space-y-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Select Month *</label>
+                                <select id="statementMonth" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                                    <option value="August 2026">August 2026</option>
+                                    <option value="September 2026" selected>September 2026</option>
+                                    <option value="October 2026">October 2026</option>
+                                    <option value="November 2026">November 2026</option>
+                                    <option value="December 2026">December 2026</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Attach Passbook Photo / PDF *</label>
+                                <input type="file" id="statementFile" accept="image/*" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-1.5 text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-amber-500 file:text-black font-bold">
+                            </div>
+                            <div>
+                                <input type="password" id="statementAdminPass" placeholder="Admin Password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 font-mono">
+                            </div>
+                            <button type="submit" id="statementBtn" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs transition">
+                                Upload Statement 📄
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- STATEMENTS ARCHIVE STREAM -->
+                    <div class="lg:col-span-2 space-y-3" id="statementsStream"></div>
+                </div>
+            </section>
+
+            <!-- COMMUNITY FEED & OFFICIAL GALLERY -->
+            <section class="glass p-6 rounded-3xl border border-slate-800 space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-black text-white" data-i18n="feedTitle">Community Feed & Gallery 📸</h2>
+                        <p class="text-xs text-slate-400" data-i18n="feedSub">Flat celebrations, events, and official admin announcements.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 lg:col-span-1 space-y-4">
+                        <h3 class="text-xs font-black uppercase text-cyan-400 tracking-wider" data-i18n="postEventTitle">Post Event / Notice</h3>
+                        <form id="eventForm" class="space-y-3">
+                            <div>
+                                <select id="eventCategory" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                                    <option value="Resident Event 🎉">Resident Event 🎉</option>
+                                    <option value="Official Notice 📢">Official Notice 📢 (Admin)</option>
+                                    <option value="Festival / Celebration 🪔">Festival / Celebration 🪔</option>
+                                </select>
+                            </div>
+                            <div>
+                                <input type="text" id="eventTitle" placeholder="Event Title / Summary" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                            </div>
+                            <div>
+                                <textarea id="eventDesc" rows="3" placeholder="Description or Details..." required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200"></textarea>
+                            </div>
+                            <div>
+                                <input type="file" id="eventPhoto" accept="image/*" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-1.5 text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-cyan-500 file:text-black font-bold">
+                            </div>
+                            <button type="submit" id="eventBtn" class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black py-2.5 rounded-xl text-xs transition">
+                                Post to Feed 🚀
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="lg:col-span-2 space-y-4" id="eventsStream"></div>
+                </div>
+            </section>
+
+            <!-- PHOTO COMPLAINTS PORTAL -->
+            <section class="glass p-6 rounded-3xl border border-slate-800 space-y-6">
+                <div>
+                    <h2 class="text-lg font-black text-white" data-i18n="complaintsTitle">Incident & Photo Complaint Box 🛠️</h2>
+                    <p class="text-xs text-slate-400">Report repairs with photo proof to the association.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 lg:col-span-1">
+                        <form id="complaintForm" class="space-y-3">
+                            <div>
+                                <select id="compCategory" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                                    <option value="Plumbing / Drainage">Plumbing / Drainage</option>
+                                    <option value="Electrical / Motor">Electrical / Motor</option>
+                                    <option value="Elevator Issue">Elevator Issue</option>
+                                    <option value="Parking Gridlock">Parking Gridlock</option>
+                                    <option value="Security / Watchman">Security / Watchman</option>
+                                </select>
+                            </div>
+                            <div>
+                                <input type="text" id="compTitle" placeholder="Summary (e.g. 3rd Floor Bulb Out)" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                            </div>
+                            <div>
+                                <textarea id="compDesc" rows="3" placeholder="Details..." required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200"></textarea>
+                            </div>
+                            <div>
+                                <input type="file" id="compPhoto" accept="image/*" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-1.5 text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-indigo-600 file:text-white font-bold">
+                            </div>
+                            <button type="submit" id="compBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 rounded-xl text-xs transition">
+                                Submit Complaint
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="lg:col-span-2 space-y-3" id="complaintsStream"></div>
+                </div>
+            </section>
+
+            <!-- EXPENSE AUDIT STREAM -->
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="glass p-6 rounded-3xl border border-slate-800 lg:col-span-1">
+                    <h2 class="text-base font-black text-white mb-4">Log Repair Expense 🧾</h2>
+                    <form id="expenseForm" class="space-y-3">
+                        <input type="text" id="expTitle" placeholder="Expense Title (e.g. Motor Repair)" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                        <input type="number" id="expAmount" placeholder="Amount (₹)" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200">
+                        <div>
+                            <input type="file" id="expReceiptFile" accept="image/*" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-1.5 text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-emerald-600 file:text-white font-bold">
+                        </div>
+                        <button type="submit" id="expSubmitBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-black py-2.5 rounded-xl text-xs transition">
+                            Post Expense
+                        </button>
+                    </form>
+                </div>
+                <div class="glass p-6 rounded-3xl border border-slate-800 lg:col-span-2">
+                    <h2 class="text-base font-black text-white mb-4">Expense Audit Stream</h2>
+                    <div class="space-y-3" id="expenseStream"></div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- STRICT ADMIN PANEL MODAL -->
+    <div id="adminModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4 z-50">
+        <div class="glass border border-slate-700 rounded-3xl p-6 max-w-md w-full space-y-5">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-black text-amber-400 text-lg">⚙️ Association Admin Controls</h3>
+                <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <p class="text-xs text-slate-400">Authorized access strictly for President, Secretary & Treasurer.</p>
+            <input type="password" id="adminPin" placeholder="Enter Admin Password..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-center text-sm font-mono text-white">
+            
+            <div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                <button onclick="adminResetFlatsCurrentMonth()" class="w-full bg-amber-600/20 text-amber-300 border border-amber-500/40 p-2.5 rounded-xl text-xs font-bold text-left flex justify-between items-center">
+                    <span>🔄 Force Reset Current Month Flats</span>➔
+                </button>
+                <button onclick="adminSetBroadcast()" class="w-full bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 p-2.5 rounded-xl text-xs font-bold text-left flex justify-between items-center">
+                    <span>📢 Update Urgent Broadcast Banner</span>➔
+                </button>
+                <button onclick="adminClearCollection('complaints')" class="w-full bg-rose-600/20 text-rose-300 border border-rose-500/40 p-2.5 rounded-xl text-xs font-bold text-left flex justify-between items-center">
+                    <span>🗑️ Clear Complaints & Photos</span>➔
+                </button>
+                <button onclick="adminClearCollection('events')" class="w-full bg-rose-600/20 text-rose-300 border border-rose-500/40 p-2.5 rounded-xl text-xs font-bold text-left flex justify-between items-center">
+                    <span>🗑️ Clear Community Feed Posts</span>➔
+                </button>
+                <button onclick="adminClearCollection('expenses')" class="w-full bg-rose-600/20 text-rose-300 border border-rose-500/40 p-2.5 rounded-xl text-xs font-bold text-left flex justify-between items-center">
+                    <span>🗑️ Clear Expense Audit Receipts</span>➔
+                </button>
+                <button onclick="adminClearCollection('bank_statements')" class="w-full bg-rose-600/20 text-rose-300 border border-rose-500/40 p-2.5 rounded-xl text-xs font-bold text-left flex justify-between items-center">
+                    <span>🗑️ Clear Bank Passbook Archive</span>➔
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMAGE LIGHTBOX MODAL -->
+    <div id="imgModal" class="fixed inset-0 bg-slate-950/95 hidden items-center justify-center p-4 z-50" onclick="this.classList.add('hidden')">
+        <img id="imgModalSrc" class="max-w-full max-h-[85vh] rounded-2xl shadow-2xl border border-slate-700">
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHRMW72eUl8pDU4g4-dHZGpc4iJS2KtpA",
+            authDomain: "av-towers.firebaseapp.com",
+            projectId: "av-towers",
+            storageBucket: "av-towers.firebasestorage.app",
+            messagingSenderId: "356968813856",
+            appId: "1:356968813856:web:e5e6db166e0f0374a6b345"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // STRICT ADMIN PASSWORD (OFFLINE SHARED)
+        const ADMIN_PIN = "Avtowers@123";
+        let activeFlat = localStorage.getItem("av_v2_flat") || null;
+        let currentLang = "en";
+
+        // AUTO-RESET MONTH DETECTOR KEY (Format: YYYY-MM e.g. 2026-09)
+        function getCurrentMonthKey() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+        }
+
+        const i18n = {
+            en: {
+                collected: "Collected", spent: "Spent", balance: "Balance", complaints: "Open Issues",
+                matrixTitle: "19-Flat Maintenance Grid", matrixSub: "Tap your flat number to update status.",
+                feedTitle: "Community Feed & Gallery 📸", feedSub: "Flat celebrations, events, and official admin announcements.",
+                postEventTitle: "Post Event / Notice", complaintsTitle: "Incident & Photo Complaint Box 🛠️"
+            },
+            te: {
+                collected: "వసూలైనది", spent: "ఖర్చులు", balance: "మిగిలిన ధనం", complaints: "ఫిర్యాదులు",
+                matrixTitle: "19 ఫ్లాట్ల మెయింటెనెన్స్ వివరాలు", matrixSub: "మీ ఫ్లాట్ నంబర్ పై క్లిక్ చేసి స్టేటస్ మార్చండి.",
+                feedTitle: "కమ్యూనిటీ ఈవెంట్స్ & ఫోటోలు 📸", feedSub: "అపార్ట్మెంట్ ఈవెంట్స్ మరియు అధికారిక సమాచారం.",
+                postEventTitle: "ఈవెంట్ / నోటీస్ పోస్ట్ చేయండి", complaintsTitle: "రిపేర్ ఫిర్యాదుల విభాగం 🛠️"
+            },
+            hi: {
+                collected: "कुल जमा", spent: "कुल खर्च", balance: "शेष राशि", complaints: "खुली शिकायतें",
+                matrixTitle: "19-फ्लैट मेंटेनेंस ग्रिड", matrixSub: "स्थिति बदलने के लिए अपने फ्लैट नंबर पर टैप करें।",
+                feedTitle: "कम्युनिटी फीड और गैलरी 📸", feedSub: "फ्लैट उत्सव, कार्यक्रम और आधिकारिक घोषणाएं।",
+                postEventTitle: "कार्यक्रम / नोटिस पोस्ट करें", complaintsTitle: "शिकायत एवं फोटो बॉक्स 🛠️"
+            }
+        };
+
+        const buildingLayout = [
+            { floor: "5th Floor", flats: [501, 502] },
+            { floor: "4th Floor", flats: [401, 402, 403, 404, 405] },
+            { floor: "3rd Floor", flats: [301, 302, 303, 304, 305] },
+            { floor: "2nd Floor", flats: [201, 202, 203, 204, 205] },
+            { floor: "1st Floor", flats: [104, 105] }
+        ];
+
+        let flatData = {};
+        let expensesList = [];
+
+        if (activeFlat) {
+            initApp();
+        }
+
+        function unlockResidentPortal() {
+            const input = document.getElementById("residentPinInput").value.trim();
+            if (input.length === 4 && input.endsWith("0")) {
+                const derivedFlat = input.slice(0, 3);
+                activeFlat = derivedFlat;
+                localStorage.setItem("av_v2_flat", derivedFlat);
+                initApp();
+            } else {
+                alert("Invalid Passcode! Formula: Flat Number + '0' (e.g., Flat 104 passcode is 1040)");
+            }
+        }
+
+        function initApp() {
+            document.getElementById("loginOverlay").classList.add("hidden");
+            document.getElementById("appContainer").classList.remove("hidden");
+            document.getElementById("userFlatBadge").innerText = `Flat ${activeFlat}`;
+            document.getElementById("currentMonthBadge").innerText = getCurrentMonthKey();
+            setupFirestoreListeners();
+        }
+
+        function logoutResident() {
+            localStorage.removeItem("av_v2_flat");
+            location.reload();
+        }
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            document.querySelectorAll("[data-i18n]").forEach(el => {
+                const key = el.getAttribute("data-i18n");
+                if (i18n[lang][key]) el.innerText = i18n[lang][key];
+            });
+        }
+
+        function setupFirestoreListeners() {
+            db.collection("flats").onSnapshot(snapshot => {
+                flatData = {};
+                snapshot.forEach(doc => { 
+                    const data = doc.data();
+                    flatData[doc.id] = (data.lastPaidMonth === getCurrentMonthKey()); 
+                });
+                renderMatrix();
+            });
+
+            db.collection("bank_statements").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+                const stream = document.getElementById("statementsStream");
+                stream.innerHTML = "";
+                if (snapshot.empty) {
+                    stream.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 glass rounded-2xl">No bank statements uploaded yet. Admin can upload month-wise passbook receipts.</div>`;
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    const item = doc.data();
+                    const card = document.createElement("div");
+                    card.className = "p-4 rounded-2xl glass border border-slate-800 flex justify-between items-center";
+                    card.innerHTML = `
+                        <div>
+                            <span class="text-[10px] text-amber-400 font-mono font-bold uppercase">Official Statement</span>
+                            <h4 class="font-bold text-white text-sm">${item.month}</h4>
+                        </div>
+                        <button onclick="viewImage('${item.photo}')" class="text-xs text-amber-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl font-bold">
+                            View Passbook 📄
+                        </button>
+                    `;
+                    stream.appendChild(card);
+                });
+            });
+
+            db.collection("events").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+                const stream = document.getElementById("eventsStream");
+                stream.innerHTML = "";
+                if (snapshot.empty) {
+                    stream.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 glass rounded-2xl">No community posts yet.</div>`;
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    const item = doc.data();
+                    const card = document.createElement("div");
+                    card.className = "p-4 rounded-2xl glass border border-slate-800 space-y-3";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">${item.category}</span>
+                            <span class="text-[10px] text-slate-400">By Flat ${item.flat}</span>
+                        </div>
+                        <h4 class="font-bold text-white text-sm">${item.title}</h4>
+                        <p class="text-xs text-slate-300">${item.desc}</p>
+                        ${item.photo ? `<button onclick="viewImage('${item.photo}')" class="text-xs text-cyan-400 font-bold bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">View Photo 🖼️</button>` : ''}
+                    `;
+                    stream.appendChild(card);
+                });
+            });
+
+            db.collection("complaints").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+                const stream = document.getElementById("complaintsStream");
+                stream.innerHTML = "";
+                let count = 0;
+                snapshot.forEach(doc => {
+                    count++;
+                    const item = doc.data();
+                    const card = document.createElement("div");
+                    card.className = "p-4 rounded-2xl glass border border-slate-800 space-y-2";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold px-2 py-0.5 rounded-full">Flat ${item.flat} • ${item.category}</span>
+                            <span class="text-[10px] text-slate-400 font-bold">${item.status}</span>
+                        </div>
+                        <h4 class="font-bold text-white text-sm">${item.title}</h4>
+                        <p class="text-xs text-slate-400">${item.desc}</p>
+                        ${item.photo ? `<button onclick="viewImage('${item.photo}')" class="text-xs text-indigo-400 font-bold bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">View Photo Proof 📸</button>` : ''}
+                    `;
+                    stream.appendChild(card);
+                });
+                document.getElementById("openComplaintsCount").innerText = count;
+            });
+
+            db.collection("expenses").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+                expensesList = [];
+                snapshot.forEach(doc => { expensesList.push({ id: doc.id, ...doc.data() }); });
+                renderExpenses();
+            });
+        }
+
+        function renderMatrix() {
+            const container = document.getElementById("flatsGrid");
+            container.innerHTML = "";
+
+            buildingLayout.forEach(f => {
+                const row = document.createElement("div");
+                row.className = "flex flex-col md:flex-row md:items-center gap-2 border-b border-slate-800/60 pb-2";
+                let html = `<span class="text-xs font-semibold text-slate-400 w-24">${f.floor}</span><div class="flex flex-wrap gap-2 flex-1">`;
+                
+                f.flats.forEach(flat => {
+                    const isPaid = flatData[flat] || false;
+                    const badgeClass = isPaid ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" : "bg-amber-500/20 text-amber-400 border-amber-500/40";
+                    html += `
+                        <button onclick="toggleFlat(${flat}, ${isPaid})" class="px-3 py-1.5 rounded-xl border text-xs font-mono font-bold ${badgeClass} transition active:scale-95">
+                            F-${flat} [${isPaid ? 'PAID' : 'DUE'}]
+                        </button>
+                    `;
+                });
+                html += `</div>`;
+                row.innerHTML = html;
+                container.appendChild(row);
+            });
+
+            const paidCount = Object.values(flatData).filter(Boolean).length;
+            document.getElementById("totalCollected").innerText = `₹${(paidCount * 1500).toLocaleString()}`;
+            updateBalance();
+        }
+
+        function toggleFlat(flat, currentStatus) {
+            const targetMonth = currentStatus ? "" : getCurrentMonthKey();
+            db.collection("flats").doc(String(flat)).set({ lastPaidMonth: targetMonth }, { merge: true });
+        }
+
+        function renderExpenses() {
+            const stream = document.getElementById("expenseStream");
+            stream.innerHTML = "";
+            let totalSpent = 0;
+
+            expensesList.forEach(exp => {
+                totalSpent += Number(exp.amount);
+                const card = document.createElement("div");
+                card.className = "p-4 rounded-2xl glass border border-slate-800 flex justify-between items-center";
+                card.innerHTML = `
+                    <div>
+                        <h4 class="font-bold text-white text-sm">${exp.title}</h4>
+                        <p class="text-xs text-slate-400">Amount: ₹${Number(exp.amount).toLocaleString()}</p>
+                    </div>
+                    ${exp.receiptData ? `<button onclick="viewImage('${exp.receiptData}')" class="text-xs text-emerald-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">View Receipt 🧾</button>` : ''}
+                `;
+                stream.appendChild(card);
+            });
+
+            document.getElementById("totalSpent").innerText = `₹${totalSpent.toLocaleString()}`;
+            updateBalance();
+        }
+
+        function updateBalance() {
+            const collected = parseInt(document.getElementById("totalCollected").innerText.replace(/[^0-9]/g, '')) || 0;
+            const spent = parseInt(document.getElementById("totalSpent").innerText.replace(/[^0-9]/g, '')) || 0;
+            document.getElementById("currentBalance").innerText = `₹${(collected - spent).toLocaleString()}`;
+        }
+
+        // BANK STATEMENT UPLOAD (ADMIN SECURED)
+        document.getElementById("bankStatementForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const pass = document.getElementById("statementAdminPass").value;
+            if (pass !== ADMIN_PIN) {
+                alert("Incorrect Admin Password! Upload rejected.");
+                return;
+            }
+
+            const btn = document.getElementById("statementBtn");
+            const fileInput = document.getElementById("statementFile");
+            btn.innerText = "Uploading..."; btn.disabled = true;
+
+            const month = document.getElementById("statementMonth").value;
+
+            compressImage(fileInput.files[0], (base64Img) => {
+                db.collection("bank_statements").add({
+                    month, photo: base64Img,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    e.target.reset();
+                    btn.innerText = "Upload Statement 📄"; btn.disabled = false;
+                    alert("Bank Statement Uploaded Successfully!");
+                });
+            });
+        });
+
+        // EVENT FORM SUBMISSION
+        document.getElementById("eventForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("eventPhoto");
+            const btn = document.getElementById("eventBtn");
+            btn.innerText = "Posting..."; btn.disabled = true;
+
+            const title = document.getElementById("eventTitle").value;
+            const desc = document.getElementById("eventDesc").value;
+            const category = document.getElementById("eventCategory").value;
+
+            if (fileInput.files.length > 0) {
+                compressImage(fileInput.files[0], (base64Img) => {
+                    db.collection("events").add({
+                        flat: activeFlat, category, title, desc, photo: base64Img,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }).then(() => { e.target.reset(); btn.innerText = "Post to Feed 🚀"; btn.disabled = false; });
+                });
+            } else {
+                db.collection("events").add({
+                    flat: activeFlat, category, title, desc, photo: null,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => { e.target.reset(); btn.innerText = "Post to Feed 🚀"; btn.disabled = false; });
+            }
+        });
+
+        // COMPLAINT SUBMISSION
+        document.getElementById("complaintForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("compPhoto");
+            const btn = document.getElementById("compBtn");
+            btn.innerText = "Submitting..."; btn.disabled = true;
+
+            const title = document.getElementById("compTitle").value;
+            const desc = document.getElementById("compDesc").value;
+            const category = document.getElementById("compCategory").value;
+
+            if (fileInput.files.length > 0) {
+                compressImage(fileInput.files[0], (base64Img) => {
+                    db.collection("complaints").add({
+                        flat: activeFlat, category, title, desc, photo: base64Img, status: "REPORTED",
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }).then(() => { e.target.reset(); btn.innerText = "Submit Complaint"; btn.disabled = false; });
+                });
+            } else {
+                db.collection("complaints").add({
+                    flat: activeFlat, category, title, desc, photo: null, status: "REPORTED",
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => { e.target.reset(); btn.innerText = "Submit Complaint"; btn.disabled = false; });
+            }
+        });
+
+        // EXPENSE SUBMISSION
+        document.getElementById("expenseForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("expReceiptFile");
+            const btn = document.getElementById("expSubmitBtn");
+            btn.innerText = "Posting..."; btn.disabled = true;
+
+            const title = document.getElementById("expTitle").value;
+            const amount = Number(document.getElementById("expAmount").value);
+
+            if (fileInput.files.length > 0) {
+                compressImage(fileInput.files[0], (base64Img) => {
+                    db.collection("expenses").add({
+                        title, amount, receiptData: base64Img,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }).then(() => { e.target.reset(); btn.innerText = "Post Expense"; btn.disabled = false; });
+                });
+            } else {
+                db.collection("expenses").add({
+                    title, amount, receiptData: null,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => { e.target.reset(); btn.innerText = "Post Expense"; btn.disabled = false; });
+            }
+        });
+
+        function compressImage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    let width = img.width, height = img.height, maxDim = 800;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+                        else { width = Math.round((width * maxDim) / height); height = maxDim; }
+                    }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, width, height);
+                    callback(canvas.toDataURL("image/jpeg", 0.7));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function viewImage(base64Data) {
+            document.getElementById("imgModalSrc").src = base64Data;
+            document.getElementById("imgModal").classList.remove("hidden");
+            document.getElementById("imgModal").classList.add("flex");
+        }
+
+        // STRICT ADMIN ACTIONS
+        function openAdminModal() { document.getElementById("adminModal").classList.remove("hidden"); document.getElementById("adminModal").classList.add("flex"); }
+        function closeAdminModal() { document.getElementById("adminModal").classList.add("hidden"); document.getElementById("adminModal").classList.remove("flex"); }
+        function verifyPin() { return document.getElementById("adminPin").value === ADMIN_PIN; }
+
+        function adminResetFlatsCurrentMonth() {
+            if (!verifyPin()) return alert("Invalid Admin Password! Access Denied.");
+            if (!confirm("Are you sure you want to force reset all 19 flats for current month to DUE?")) return;
+            buildingLayout.forEach(f => f.flats.forEach(flat => db.collection("flats").doc(String(flat)).set({ lastPaidMonth: "" }, { merge: true })));
+            alert("All flats force-reset to DUE for current month!"); closeAdminModal();
+        }
+
+        function adminSetBroadcast() {
+            if (!verifyPin()) return alert("Invalid Admin Password!");
+            const msg = prompt("Enter urgent announcement text for residents:");
+            if (msg) {
+                document.getElementById("broadcastText").innerText = msg;
+                document.getElementById("urgentBroadcast").classList.remove("hidden");
+                alert("Urgent broadcast active on top!");
+            }
+            closeAdminModal();
+        }
+
+        function adminClearCollection(colName) {
+            if (!verifyPin()) return alert("Invalid Admin Password!");
+            if (!confirm(`Are you sure you want to erase all data in ${colName}?`)) return;
+            db.collection(colName).get().then(s => { s.forEach(doc => doc.ref.delete()); alert(`Cleared all items from ${colName}!`); closeAdminModal(); });
+        }
+    </script>
+</body>
+</html>
